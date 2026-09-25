@@ -26,7 +26,7 @@ It is built to be switched on for demos and deleted afterwards.
 | Running | ~$0.15–0.25/hour (9 Spot tasks, load balancer, db.t4g.micro, public IPs) |
 | Deleted | ~$0 (state bucket only) |
 | Guard 1 | **Auto-shutdown**: hourly workflow destroys the stack after 4 hours |
-| Guard 2 | **AWS spend limit** on the project pauses everything if the monthly cap is hit |
+| Guard 2 | **$20/month budget** (in `bootstrap/`) emails at 50%, 75%, 100% and when the forecast passes it |
 
 ## Layout
 

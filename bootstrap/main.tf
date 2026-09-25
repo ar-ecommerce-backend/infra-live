@@ -84,6 +84,42 @@ resource "aws_iam_role_policy_attachment" "github_deploy_admin" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
+# --- Cost alerts ------------------------------------------------------------------
+# Alerts only - AWS has no hard cap on this account type. The hourly auto-shutdown
+# workflow is what actually stops spend; these emails catch it if that ever breaks.
+
+variable "alert_email" {
+  description = "Where budget alerts go. Asked for at apply time, never committed."
+  type        = string
+}
+
+resource "aws_budgets_budget" "monthly" {
+  name         = "ecom-monthly"
+  budget_type  = "COST"
+  limit_amount = "20"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  dynamic "notification" {
+    for_each = [50, 75, 100]
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = [var.alert_email]
+    }
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.alert_email]
+  }
+}
+
 output "state_bucket" {
   value = aws_s3_bucket.state.bucket
 }
