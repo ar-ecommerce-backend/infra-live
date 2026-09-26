@@ -1,0 +1,50 @@
+name: Auto-shutdown
+
+# Cost guard: every hour, delete the demo environment if it has been up longer than
+# MAX_HOURS. A forgotten "up" therefore costs at most a few hours of runtime.
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+env:
+  MAX_HOURS: 4
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws
+    steps:
+      - uses: actions/checkout@v5
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: Destroy if running too long
+        run: |
+          if ! terraform state list | grep -q .; then echo "Nothing running."; exit 0; fi
+          up_since=$(terraform output -raw up_since 2>/dev/null || true)
+          if [ -n "$up_since" ]; then
+            age_h=$(( ($(date +%s) - $(date -d "$up_since" +%s)) / 3600 ))
+            echo "Up since $up_since (${age_h}h, limit ${MAX_HOURS}h)."
+            [ "$age_h" -lt "$MAX_HOURS" ] && exit 0
+          else
+            echo "Resources exist without a timestamp (a failed 'up'?) - removing them."
+          fi
+          terraform destroy -auto-approve -input=false

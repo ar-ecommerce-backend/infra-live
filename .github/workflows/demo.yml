@@ -1,0 +1,86 @@
+name: Demo environment
+
+# "up" creates the whole platform on AWS (~15 min) and runs the E2E suite against it.
+# "down" deletes all of it. auto-shutdown.yml runs "down" by itself after a few hours.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "up = create everything, down = delete everything"
+        type: choice
+        options: [up, down]
+        default: up
+      image_tag:
+        description: "GHCR image tag to run"
+        default: main
+
+permissions:
+  id-token: write # OIDC: short-lived AWS credentials, no stored keys
+  contents: read
+
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws
+    outputs:
+      url: ${{ steps.out.outputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - if: inputs.action == 'up'
+        run: terraform apply -auto-approve -input=false -var "image_tag=${{ inputs.image_tag }}"
+      - if: inputs.action == 'down'
+        run: terraform destroy -auto-approve -input=false
+
+      - id: out
+        if: inputs.action == 'up'
+        run: echo "url=$(terraform output -raw url)" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    if: inputs.action == 'up'
+    needs: terraform
+    runs-on: ubuntu-latest
+    env:
+      E2E_BASE_URL: ${{ needs.terraform.outputs.url }}
+    steps:
+      - name: Wait until the platform serves requests
+        run: |
+          for i in $(seq 1 80); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_BASE_URL/api/products")" = 200 ] && exit 0
+            sleep 15
+          done
+          echo "gateway never served /api/products"; exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/e2e-tests
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: E2E suite against the live environment
+        run: chmod +x gradlew && ./gradlew test --no-daemon --console=plain
+
+      # The suite skips itself when it cannot reach the gateway; that must not pass here.
+      - name: Fail if anything was skipped
+        run: |
+          ! grep -L 'skipped="0"' build/test-results/test/*.xml | grep -q .
+
+      - run: echo "### Live at $E2E_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
