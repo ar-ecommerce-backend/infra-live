@@ -16,9 +16,14 @@ variable "region" {
 }
 
 variable "github_repo" {
-  description = "Only workflows on this repo's main branch may assume the deploy role."
+  description = <<-EOT
+    Only workflows on this repo's main branch may assume the deploy role. GitHub's
+    "immutable subject" format: owner and repo names plus their permanent IDs, so a
+    renamed org's old name can't be re-registered by someone else to match this rule.
+    Check with: gh api repos/<owner>/<repo>/actions/oidc/customization/sub
+  EOT
   type        = string
-  default     = "ar-ecommerce-backend/infra-live"
+  default     = "ar-ecommerce-backend@221634812/infra-live@1081559855"
 }
 
 provider "aws" {
