@@ -125,6 +125,49 @@ resource "aws_budgets_budget" "monthly" {
   }
 }
 
+# --- HTTPS certificate ----------------------------------------------------------------
+# Lives here, not in aws/, so it survives "demo down": issued and validated once,
+# renewed by AWS automatically. aws/ looks it up by domain name.
+
+variable "domain" {
+  description = "Registered in Route 53 (which created the hosted zone)."
+  type        = string
+  default     = "ar-ecommerce-backend.com"
+}
+
+data "aws_route53_zone" "main" {
+  name = var.domain
+}
+
+resource "aws_acm_certificate" "main" {
+  domain_name       = var.domain
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# AWS proves we own the domain by checking for this DNS record.
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for o in aws_acm_certificate.main.domain_validation_options : o.domain_name => o
+  }
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = each.value.resource_record_name
+  type    = each.value.resource_record_type
+  records = [each.value.resource_record_value]
+  ttl     = 300
+}
+
+resource "aws_acm_certificate_validation" "main" {
+  certificate_arn         = aws_acm_certificate.main.arn
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+}
+
+output "certificate_arn" {
+  value = aws_acm_certificate_validation.main.certificate_arn
+}
+
 output "state_bucket" {
   value = aws_s3_bucket.state.bucket
 }
