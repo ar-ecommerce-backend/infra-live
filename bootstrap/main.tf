@@ -18,7 +18,7 @@ variable "region" {
 variable "github_repo" {
   description = "Only workflows on this repo's main branch may assume the deploy role."
   type        = string
-  default     = "ar-ecommerce-platform/infra-live"
+  default     = "ar-ecommerce-backend/infra-live"
 }
 
 provider "aws" {

@@ -99,7 +99,7 @@ locals {
       }],
       [{
         name         = name
-        image        = "ghcr.io/ar-ecommerce-platform/${name}:${var.image_tag}"
+        image        = "ghcr.io/ar-ecommerce-backend/${name}:${var.image_tag}"
         essential    = true
         portMappings = [{ containerPort = svc.port }]
         dependsOn    = svc.db == "" ? [] : [{ containerName = "db-init", condition = "SUCCESS" }]
