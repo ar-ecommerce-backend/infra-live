@@ -21,6 +21,12 @@ variable "region" {
   default = "us-east-2"
 }
 
+variable "domain" {
+  description = "Registered in Route 53; its certificate is created by bootstrap/."
+  type        = string
+  default     = "ar-ecommerce-backend.com"
+}
+
 variable "image_tag" {
   description = "GHCR tag to run for every service."
   type        = string
@@ -64,7 +70,7 @@ locals {
 resource "time_static" "up_since" {}
 
 output "url" {
-  value = "http://${aws_lb.gateway.dns_name}"
+  value = "https://${var.domain}"
 }
 
 output "up_since" {

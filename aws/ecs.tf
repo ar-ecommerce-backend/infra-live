@@ -187,7 +187,7 @@ resource "aws_ecs_service" "svc" {
   # JVMs on 0.25 vCPU take a while to start and register with Eureka.
   health_check_grace_period_seconds = each.key == "api-gateway" ? 300 : null
 
-  depends_on = [aws_ecs_cluster_capacity_providers.main, aws_lb_listener.http]
+  depends_on = [aws_ecs_cluster_capacity_providers.main, aws_lb_listener.https]
 }
 
 # --- Public entry point: load balancer -> gateway only -----------------------------
@@ -215,12 +215,53 @@ resource "aws_lb_target_group" "gateway" {
   }
 }
 
+# HTTPS only: port 80 just sends visitors to https:// (encryption in transit).
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.gateway.arn
   port              = 80
   protocol          = "HTTP"
   default_action {
+    type = "redirect"
+    redirect {
+      protocol    = "HTTPS"
+      port        = "443"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.gateway.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06" # TLS 1.2+ only
+  certificate_arn   = data.aws_acm_certificate.main.arn
+  default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.gateway.arn
+  }
+}
+
+# --- Domain: ar-ecommerce-backend.com -> this load balancer --------------------------
+# The certificate and hosted zone come from bootstrap/ (they survive "demo down").
+
+data "aws_route53_zone" "main" {
+  name = var.domain
+}
+
+data "aws_acm_certificate" "main" {
+  domain   = var.domain
+  statuses = ["ISSUED"]
+}
+
+# Every "up" creates a new load balancer with a new address; this keeps the domain on it.
+resource "aws_route53_record" "apex" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = var.domain
+  type    = "A"
+  alias {
+    name                   = aws_lb.gateway.dns_name
+    zone_id                = aws_lb.gateway.zone_id
+    evaluate_target_health = true
   }
 }
