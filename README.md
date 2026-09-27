@@ -1,6 +1,6 @@
 # infra-live
 
-Terraform for running the ar-ecommerce-platform on AWS (us-east-2), plus the GitHub
+Terraform for running the ar-ecommerce-backend on AWS (us-east-2), plus the GitHub
 Actions that create it, test it, and tear it down.
 
 ```
