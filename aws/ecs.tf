@@ -109,6 +109,10 @@ locals {
               SERVER_PORT                          = tostring(svc.port)
               EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = "http://discovery-server.${local.name}.local:8761/eureka/"
               JAVA_TOOL_OPTIONS                    = "-XX:MaxRAMPercentage=75"
+              # Fargate tasks also have a link-local interface (169.254.172.x). Without this,
+              # Spring registers that address in Eureka and nobody can reach the service.
+              # "10.20." for the 10.20.0.0/16 VPC.
+              SPRING_CLOUD_INETUTILS_PREFERREDNETWORKS = "${join(".", slice(split(".", aws_vpc.main.cidr_block), 0, 2))}."
             },
             svc.db == "" ? {} : merge(local.db_env, {
               SPRING_DATASOURCE_URL = "jdbc:postgresql://${aws_db_instance.main.address}:5432/${svc.db}"
