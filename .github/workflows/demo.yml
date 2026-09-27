@@ -17,6 +17,7 @@ on:
 
 permissions:
   id-token: write # OIDC: short-lived AWS credentials, no stored keys
+  actions: write # "up" starts the auto-down timer
   contents: read
 
 concurrency:
@@ -42,6 +43,13 @@ jobs:
           terraform_wrapper: false
       - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
 
+      # Before apply, so even a half-finished "up" gets cleaned up.
+      - name: Start the auto-down timer
+        if: inputs.action == 'up'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run auto-down-timer.yml -R "$GITHUB_REPOSITORY"
+
       - if: inputs.action == 'up'
         run: terraform apply -auto-approve -input=false -var "image_tag=${{ inputs.image_tag }}"
       - if: inputs.action == 'down'
@@ -60,7 +68,7 @@ jobs:
     steps:
       - name: Wait until the platform serves requests
         run: |
-          for i in $(seq 1 80); do
+          for _ in $(seq 1 80); do
             [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_BASE_URL/api/products")" = 200 ] && exit 0
             sleep 15
           done

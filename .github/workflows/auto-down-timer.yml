@@ -1,0 +1,38 @@
+name: Auto-down timer
+
+# Cost guard, part 1. "Demo environment -> up" starts this; it waits, then runs "down".
+# A new "up" cancels the running timer, so the clock restarts from the latest "up".
+# Part 2 is auto-shutdown.yml (hourly), kept as a backup: GitHub runs scheduled
+# workflows late when it is busy, but a timer that is already running is not delayed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "Hours to wait before running down (0 = right away, for testing)"
+        default: "4"
+
+permissions:
+  actions: write # to start the "down" run
+  contents: read
+
+concurrency:
+  group: auto-down-timer
+  cancel-in-progress: true
+
+jobs:
+  timer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300 # GitHub's hard limit is 360
+    steps:
+      - name: Wait
+        env:
+          HOURS: ${{ inputs.hours }} # via env, never pasted into the script (injection)
+        run: |
+          [[ "$HOURS" =~ ^[0-4]$ ]] || { echo "hours must be 0-4"; exit 1; }
+          sleep $(( HOURS * 3600 ))
+
+      - name: Run "down"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run demo.yml -R "$GITHUB_REPOSITORY" -f action=down

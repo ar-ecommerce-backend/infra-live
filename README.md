@@ -26,7 +26,8 @@ It is built to be switched on for demos and deleted afterwards.
 |---|---|
 | Running | ~$0.15–0.25/hour (9 Spot tasks, load balancer, db.t4g.micro, public IPs) |
 | Deleted | ~$0 (state bucket only) |
-| Guard 1 | **Auto-shutdown**: hourly workflow destroys the stack after 4 hours |
+| Guard 1 | **Auto-down timer**: every "up" starts a 4-hour timer that runs "down" (a new "up" restarts it) |
+| Guard 1b | **Auto-shutdown**: hourly backup check, destroys the stack once older than 4 hours (GitHub may run it late) |
 | Guard 2 | **$20/month budget** (in `bootstrap/`) emails at 50%, 75%, 100% and when the forecast passes it |
 
 ## Layout
@@ -36,6 +37,7 @@ It is built to be switched on for demos and deleted afterwards.
 | `bootstrap/` | State bucket + GitHub OIDC provider and deploy role | You, once, from a laptop |
 | `aws/` | Network, database, ECS services, load balancer | The **Demo environment** workflow |
 | `.github/workflows/demo.yml` | `up`: apply + E2E suite against the live URL. `down`: destroy | Manual (Actions tab) |
+| `.github/workflows/auto-down-timer.yml` | Waits 4 hours after an "up", then runs "down" | Started by "up" |
 | `.github/workflows/auto-shutdown.yml` | Destroys the stack once it is older than 4 hours | Hourly schedule |
 
 ## One-time setup
